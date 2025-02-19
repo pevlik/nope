@@ -1,0 +1,611 @@
+mMaterialData
+Option Explicit
+
+Const mainSheet As String = "Îáраáоока спецификации"
+Const mergeCondSheet As String = "Óслоâиÿ äлÿ оáúеäиаеаиÿ"
+Const orderCondSheet As String = "Äлÿ сâоäаûõ äаааûõ"
+
+Sub MaterialData()
+
+    Dim separatorState As Integer
+    Dim sheetName As String
+    
+    separatorState = mCommonRoutines.StartRoutines
+    
+    sheetName = BodyOfMacro(separatorState)
+    
+    Call mCommonRoutines.EndRoutines(separatorState, sheetName)
+    
+End Sub
+
+Function BodyOfMacro(separatorState As Integer) As String
+
+    Dim secNumber As String, projNumber As String, sheetName As String
+
+    If StrComp(Worksheets(mainSheet).TextBox1.Value, "") = 0 Then
+        Worksheets(mainSheet).TextBox1.Value = InputBox("Номер Вашей секции:")
+    End If
+
+    secNumber = Worksheets(mainSheet).TextBox1.Value
+    projNumber = Worksheets(mainSheet).TextBox2.Value
+    sheetName = "Materials_" & secNumber
+
+    Call ExportMaterialAll(secNumber, projNumber, sheetName, separatorState)
+    
+    Call MaterialHandler(sheetName)
+    
+    BodyOfMacro = sheetName
+    
+End Function
+
+Sub ExportMaterialAll(secNumber As String, projNumber As String, sheetName As String, separatorState As Integer)
+
+    Dim wsDownload As Worksheet
+    Dim pathToFile As String
+
+    pathToFile = "N:\HullProjects\" & projNumber & "\" & secNumber & "\pi\rep-pb_materials_all.list"
+    
+    Call mCommonRoutines.SheetCreater(sheetName, mainSheet)
+
+    Set wsDownload = ThisWorkbook.Sheets(sheetName)
+
+    On Error GoTo stopMacro
+    With wsDownload.QueryTables.Add(Connection:="TEXT;" & pathToFile, Destination:=wsDownload.Range("A1"))
+        .TextFileParseType = xlDelimited
+        .TextFilePlatform = 65001
+        .TextFileCommaDelimiter = True
+        .Refresh
+    End With
+    
+    GoTo continueMacro
+    
+'   If file doesn't find Then Macro will stop
+stopMacro:
+    Application.DisplayAlerts = False
+    Worksheets(sheetName).Delete
+    Application.DisplayAlerts = True
+    
+    Worksheets(mainSheet).Activate
+    Call mCommonRoutines.EndRoutines(separatorState, mainSheet)
+    End
+
+' If file exists Then Macro will continue
+continueMacro:
+    Call DataSorting(secNumber)
+
+End Sub
+
+Sub DataSorting(secNumber As String)
+
+    Columns("A:A").Select
+    Selection.TextToColumns Destination:=Range("A1"), DataType:=xlDelimited, _
+        TextQualifier:=xlDoubleQuote, Other:=True, OtherChar:="|", _
+        FieldInfo:=Array(Array(1, 1), Array(2, 1), Array(3, 1), Array(4, 1), Array(5, 1), _
+        Array(6, 1), Array(7, 1), Array(8, 1), Array(9, 1), Array(10, 1), Array(11, 1), Array(12, 1), _
+        Array(13, 1), Array(14, 1), Array(15, 1), Array(16, 1), Array(17, 1), Array(18, 1), _
+        Array(19, 1), Array(20, 1)), TrailingMinusNumbers:=True
+    Columns("A:A").Delete
+    
+    Range("A:G").Replace What:=" ", Replacement:="", LookAt:=xlPart
+    
+End Sub
+
+Sub MaterialHandler(materialSheet As String)
+    
+    Dim materialTypes() As String: materialTypes = AssignArray("A")
+    Dim flatbarTypes() As String: flatbarTypes = AssignArray("B")
+    Dim pipeList() As String: pipeList = AssignArray("C")
+    Dim sqPipeList() As String: sqPipeList = AssignArray("D")
+    Dim empMat() As String: empMat = AssignArray("E")
+    
+    Dim orderMat As Range
+'    ThisWorkbook.Worksheets(orderCondSheet).Unprotect "1111"
+    Set orderMat = ThisWorkbook.Worksheets(orderCondSheet).Range("A1").CurrentRegion
+    Set orderMat = orderMat.Resize(orderMat.Rows.Count, orderMat.Columns.Count + 1)
+'    ThisWorkbook.Worksheets(orderCondSheet).Protect "1111"
+    
+    Dim rngData As Range
+    
+    Set rngData = ThisWorkbook.Worksheets(materialSheet).Range("A1").CurrentRegion
+    
+'   Need To Delete
+'    rngData.Select
+    
+    Set rngData = SortMaterials(rngData, materialTypes, flatbarTypes)
+
+    Set rngData = ExcludePipes(rngData, pipeList)
+    
+    Set rngData = ExcludeSqPipes(rngData, sqPipeList)
+
+    Set rngData = DelEmpMat(rngData, empMat)
+    
+    Set rngData = OrderMaterials(rngData, orderMat)
+    
+    Dim i As Integer
+    For i = 6 To 1 Step -1
+        rngData(1, i).EntireColumn.Delete
+    Next i
+
+End Sub
+
+Function SortMaterials(rngData As Range, materialTypes() As String, flatbarTypes() As String) As Range
+
+    Dim iRowF As Integer, iRowS As Integer, iMType As Integer, iFBType As Integer
+    
+'   Start outer For-loop through Material Types
+    For iMType = 0 To UBound(materialTypes)
+
+'       Start of first DoWhile loop looking for Material Types matching through the list
+        iRowF = 2
+
+        Do While iRowF <= rngData.Rows.Count
+
+            If StrComp(rngData(iRowF, 1).Value, materialTypes(iMType), vbTextCompare) = 0 Then
+                
+                If StrComp(rngData(iRowF, 1).Value, "ST", vbTextCompare) = 0 Then
+                    For iFBType = 0 To UBound(flatbarTypes)
+                        If StrComp(rngData(iRowF, 2).Value, flatbarTypes(iFBType), vbTextCompare) = 0 Then
+                            GoTo ContinueDO
+                        End If
+                    Next iFBType
+                End If
+                
+'               Start of second DoWhile loop looking for "PL" matching through the list
+                iRowS = 2
+                
+                Do While iRowS <= rngData.Rows.Count
+                    
+                    If StrComp(rngData(iRowS, 1).Value, "PL", vbTextCompare) = 0 Then
+
+                        If rngData(iRowS, 3).Value = rngData(iRowF, 3).Value Then
+                        
+                            If StrComp(rngData(iRowS, 4).Value, rngData(iRowF, 4).Value, vbTextCompare) = 0 Then
+
+                                rngData(iRowS, 5).Value = rngData(iRowS, 5).Value + rngData(iRowF, 5).Value
+                                rngData(iRowF, 1).EntireRow.Delete
+                                iRowF = iRowF - 1
+
+                                Exit Do
+                                
+                            ElseIf StrComp(rngData(iRowS, 4).Value, rngData(iRowF, 4).Value, vbTextCompare) > 0 Then
+                            
+                                Set rngData = MoveAndChangeRow(rngData, iRowS, iRowF)
+                                iRowF = iRowF - 1
+
+                                Exit Do
+
+                            End If
+
+                        ElseIf rngData(iRowS, 3).Value > rngData(iRowF, 3).Value Then
+                        
+                            Set rngData = MoveAndChangeRow(rngData, iRowS, iRowF)
+                            iRowF = iRowF - 1
+
+                            Exit Do
+                            
+                        End If
+                        
+                    ElseIf StrComp(rngData(iRowS, 1).Value, "PL", vbTextCompare) > 0 Or rngData(iRowS, 1).Value = 0 Then
+                    
+                        Set rngData = MoveAndChangeRow(rngData, iRowS, iRowF)
+                        iRowF = iRowF - 1
+                        
+                        Exit Do
+                        
+                    End If
+
+                    iRowS = iRowS + 1
+                    
+                Loop
+'               End of second DoWhile loop
+
+            End If
+            
+ContinueDO:
+            
+            iRowF = iRowF + 1
+
+        Loop
+'       End of first DoWhile loop
+
+    Next iMType
+'   End outer For-loop
+    
+    Set SortMaterials = rngData
+    
+End Function
+
+Function ExcludePipes(rngData As Range, pipeList() As String) As Range
+
+    Dim iRowF As Integer, iRowS As Integer, iPList As Integer
+
+'       Start of first DoWhile loop looking for Material Types matching through the list
+        iRowF = 2
+
+        Do While iRowF <= rngData.Rows.Count
+
+            If StrComp(rngData(iRowF, 1).Value, "PY", vbTextCompare) = 0 Then
+            
+'       Start middle For-loop through Material Types
+                For iPList = 0 To UBound(pipeList)
+                
+                    If StrComp(rngData(iRowF, 2).Value, pipeList(iPList), vbTextCompare) = 0 Then
+                
+'                       Start of second DoWhile loop looking for "PL" matching through the list
+                        iRowS = 2
+                
+                        Do While iRowS <= rngData.Rows.Count
+                    
+                            If StrComp(rngData(iRowS, 1).Value, "PL", vbTextCompare) = 0 Then
+
+                                If rngData(iRowS, 3).Value = rngData(iRowF, 3).Value Then
+                        
+                                    If StrComp(rngData(iRowS, 4).Value, rngData(iRowF, 4).Value, vbTextCompare) = 0 Then
+
+                                        rngData(iRowS, 5).Value = rngData(iRowS, 5).Value + rngData(iRowF, 5).Value
+                                        rngData(iRowF, 1).EntireRow.Delete
+                                        iRowF = iRowF - 1
+
+                                        Exit Do
+                                
+                                    ElseIf StrComp(rngData(iRowS, 4).Value, rngData(iRowF, 4).Value, vbTextCompare) > 0 Then
+                            
+                                        Set rngData = MoveAndChangeRow(rngData, iRowS, iRowF)
+                                        iRowF = iRowF - 1
+
+                                        Exit Do
+
+                                    End If
+
+                                ElseIf rngData(iRowS, 3).Value > rngData(iRowF, 3).Value Then
+                        
+                                    Set rngData = MoveAndChangeRow(rngData, iRowS, iRowF)
+                                    iRowF = iRowF - 1
+
+                                    Exit Do
+                            
+                                End If
+                        
+                            ElseIf StrComp(rngData(iRowS, 1).Value, "PL", vbTextCompare) > 0 Or rngData(iRowS, 1).Value = 0 Then
+                    
+                                Set rngData = MoveAndChangeRow(rngData, iRowS, iRowF)
+                                iRowF = iRowF - 1
+                        
+                                Exit Do
+                        
+                            End If
+
+                            iRowS = iRowS + 1
+                    
+                        Loop
+'                       End of second DoWhile loop
+
+                        Exit For
+                        
+                    End If
+                
+                Next iPList
+'               End middle For-loop
+
+            End If
+            
+            iRowF = iRowF + 1
+
+        Loop
+'       End of first DoWhile loop
+    
+    Set ExcludePipes = rngData
+    
+End Function
+
+Function ExcludeSqPipes(rngData As Range, sqPipeList() As String) As Range
+
+    Dim iRowF As Integer, iRowS As Integer, iPList As Integer
+
+'       Start of first DoWhile loop looking for Material Types matching through the list
+        iRowF = 2
+
+        Do While iRowF <= rngData.Rows.Count
+
+            If StrComp(rngData(iRowF, 1).Value, "KO", vbTextCompare) = 0 Then
+            
+'       Start middle For-loop through Material Types
+                For iPList = 0 To UBound(sqPipeList)
+                
+                    If StrComp(rngData(iRowF, 2).Value, sqPipeList(iPList), vbTextCompare) = 0 Then
+                
+'                       Start of second DoWhile loop looking for "PL" matching through the list
+                        iRowS = 2
+                
+                        Do While iRowS <= rngData.Rows.Count
+                    
+                            If StrComp(rngData(iRowS, 1).Value, "PL", vbTextCompare) = 0 Then
+
+                                If rngData(iRowS, 3).Value = rngData(iRowF, 3).Value Then
+                        
+                                    If StrComp(rngData(iRowS, 4).Value, rngData(iRowF, 4).Value, vbTextCompare) = 0 Then
+
+                                        rngData(iRowS, 5).Value = rngData(iRowS, 5).Value + rngData(iRowF, 5).Value
+                                        rngData(iRowF, 1).EntireRow.Delete
+                                        iRowF = iRowF - 1
+
+                                        Exit Do
+                                
+                                    ElseIf StrComp(rngData(iRowS, 4).Value, rngData(iRowF, 4).Value, vbTextCompare) > 0 Then
+                            
+                                        Set rngData = MoveAndChangeRow(rngData, iRowS, iRowF)
+                                        iRowF = iRowF - 1
+
+                                        Exit Do
+
+                                    End If
+
+                                ElseIf rngData(iRowS, 3).Value > rngData(iRowF, 3).Value Then
+                        
+                                    Set rngData = MoveAndChangeRow(rngData, iRowS, iRowF)
+                                    iRowF = iRowF - 1
+
+                                    Exit Do
+                            
+                                End If
+                        
+                            ElseIf StrComp(rngData(iRowS, 1).Value, "PL", vbTextCompare) > 0 Or rngData(iRowS, 1).Value = 0 Then
+                    
+                                Set rngData = MoveAndChangeRow(rngData, iRowS, iRowF)
+                                iRowF = iRowF - 1
+                        
+                                Exit Do
+                        
+                            End If
+
+                            iRowS = iRowS + 1
+                    
+                        Loop
+'                       End of second DoWhile loop
+
+                        Exit For
+                        
+                    End If
+                
+                Next iPList
+'               End middle For-loop
+
+            End If
+            
+            iRowF = iRowF + 1
+
+        Loop
+'       End of first DoWhile loop
+    
+    Set ExcludeSqPipes = rngData
+    
+End Function
+
+Function DelEmpMat(rng As Range, arr() As String) As Range
+
+    Dim i As Integer, iRow As Integer
+    
+    ' Delete lines with empthy materials
+    For i = 0 To UBound(arr)
+
+        iRow = 2
+
+        Do While iRow <= rng.Rows.Count
+
+            If StrComp(rng(iRow, 4).Value, arr(i), vbTextCompare) = 0 Then
+
+                rng(iRow, 1).EntireRow.Delete
+                iRow = iRow - 1
+
+            End If
+
+            iRow = iRow + 1
+
+        Loop
+
+    Next i
+    
+    Set DelEmpMat = rng
+    
+End Function
+
+Function OrderMaterials(rngData As Range, orderMat As Range) As Range
+
+    Dim iRow As Integer, rowConst As Integer, rowTemp As Integer, i As Integer
+    
+    Set rngData = PrepareTable(rngData, orderMat)
+    
+    rowConst = 2
+
+    For iRow = 2 To orderMat.Rows.Count
+    
+        rowTemp = rowConst
+
+        Do While rowTemp <= rngData.Rows.Count
+
+            If StrComp(rngData(rowTemp, 1).Value, orderMat(iRow, 1).Value, vbTextCompare) = 0 Then
+                If IsEmpty(orderMat(iRow, 2).Value) Then
+'   PLATES
+                    If rngData(rowTemp, 3).Value = orderMat(iRow, 3).Value Then
+                
+                        If StrComp(rngData(rowTemp, 4).Value, orderMat(iRow, 4).Value, vbTextCompare) = 0 Then
+                            
+                            Set rngData = MoveRow(rngData, rowConst, rowTemp)
+                            rowTemp = rowTemp - 1     ' !!! Dirty fixing of running function 'MoveRow' - Because function accedently increases value of variable by 1 !!!
+
+                            For i = 6 To 15
+                                rngData(rowConst, i).Value(11) = orderMat(iRow, i - 1).Value(11)
+                            Next i
+                            
+                            rngData(rowConst, 6).Value = rowConst - 1
+                            
+                            If rowConst < 11 Then
+                                rngData(rowConst, 7).Value = 200 & (rowConst - 1)
+                            Else
+                                rngData(rowConst, 7).Value = 20 & (rowConst - 1)
+                            End If
+                            
+                            rngData(rowConst, 12).Formula = "=" & rngData(rowConst, 14).Address(False, False) & "/" & rngData(rowConst, 13).Address(False, False)
+                            
+                            rngData(rowConst, 14).Value = Round(rngData(rowConst, 5).Value, 1)
+                            
+                            rowConst = rowConst + 1
+                            
+                            Exit Do
+                            
+                        End If
+                    
+                    ElseIf rngData(rowTemp, 3).Value > orderMat(iRow, 3).Value Then
+                        
+                        Exit Do
+
+                    End If
+                Else
+'   PROFILES
+                    If StrComp(rngData(rowTemp, 2).Value, orderMat(iRow, 2).Value, vbTextCompare) = 0 Then
+                
+                        If StrComp(rngData(rowTemp, 4).Value, orderMat(iRow, 4).Value, vbTextCompare) = 0 Then
+                            
+                            Set rngData = MoveRow(rngData, rowConst, rowTemp)
+                            rowTemp = rowTemp - 1     ' !!! Dirty fixing of running function 'MoveRow' - Because function accedently increases value of variable by 1 !!!
+                            
+                            For i = 6 To 15
+                                rngData(rowConst, i).Value(11) = orderMat(iRow, i - 1).Value(11)
+                            Next i
+                            
+                            rngData(rowConst, 6).Value = rowConst - 1
+                            
+                            If rowConst < 11 Then
+                                rngData(rowConst, 7).Value = 200 & (rowConst - 1)
+                            Else
+                                rngData(rowConst, 7).Value = 20 & (rowConst - 1)
+                            End If
+                            
+                            rngData(rowConst, 12).Formula = "=" & rngData(rowConst, 14).Address(False, False) & "/" & rngData(rowConst, 13).Address(False, False)
+                            
+                            rngData(rowConst, 14).Value = Round(rngData(rowConst, 5).Value, 1)
+                            
+                            rowConst = rowConst + 1
+                            
+                            Exit Do
+                            
+                        End If
+                    
+                    End If
+                End If
+            End If
+
+            rowTemp = rowTemp + 1
+            
+        Loop
+        
+    Next iRow
+    
+    Set rngData = rngData.Resize((rngData.Rows.Count + 4), rngData.Columns.Count)
+    
+    For rowTemp = rowConst To rngData.Rows.Count - 4
+        
+        For i = 1 To 4
+            rngData((rowTemp + 4), (i + 7)).Value = rngData(rowTemp, i).Value
+        Next i
+
+        rngData((rowTemp + 4), 14).Value = rngData(rowTemp, 5).Value
+        
+        rngData.Range(Cells((rowTemp + 4), 6), Cells((rowTemp + 4), 14)).Interior.Color = 65535
+        
+    Next rowTemp
+    
+    For i = 0 To 2
+        rngData((rowConst - 1), 1).EntireRow.Copy: rngData((rowConst + i), 1).EntireRow.PasteSpecial Paste:=xlPasteFormats
+    Next i
+    
+    rngData(rowConst + 2, 13).Value = "Ìасса:"
+    rngData(rowConst + 2, 14).Formula = "=SUM(" & rngData(2, 14).Address(False, False) & ":" & rngData((rowConst - 1), 14).Address(False, False) & ")"
+    
+    Set OrderMaterials = rngData
+    
+End Function
+
+Function MoveAndChangeRow(rng As Range, i As Integer, j As Integer) As Range
+
+    rng(i, 1).EntireRow.Insert
+
+    If j >= i Then
+        j = j + 1
+    End If
+                        
+    With rng
+        .Rows(j).Copy: .Rows(i).PasteSpecial xlPasteValues
+    End With
+    rng(i, 1).Value = "PL"
+    rng(i, 2).ClearContents
+    rng(j, 1).EntireRow.Delete
+    
+    Set MoveAndChangeRow = rng
+    
+End Function
+
+Function MoveRow(rng As Range, i As Integer, j As Integer) As Range
+
+    rng(i, 1).EntireRow.Insert
+
+    If j >= i Then
+        j = j + 1
+    End If
+                        
+    With rng
+        .Rows(j).Copy: .Rows(i).PasteSpecial xlPasteValues
+    End With
+    
+    rng(j, 1).EntireRow.Delete
+    
+    Set MoveRow = rng
+    
+End Function
+
+Function AssignArray(iCol As String) As String()
+
+    Dim sh As Worksheet
+    Set sh = ThisWorkbook.Worksheets(mergeCondSheet)
+    
+    Dim arrayElem() As String
+    Dim size As Integer, i As Integer
+
+    size = WorksheetFunction.CountA(sh.Columns(iCol))
+    ReDim arrayElem(size - 2)
+    
+    For i = 0 To size - 2
+        arrayElem(i) = sh.Cells(i + 2, iCol).Value
+    Next i
+
+    AssignArray = arrayElem()
+    
+End Function
+
+    Function PrepareTable(rngData As Range, orderMat As Range) As Range
+        
+        Dim i As Integer
+        
+        rngData(1, 7).EntireColumn.ClearContents
+        rngData(1, 6).EntireColumn.ClearContents
+        Set rngData = rngData.Resize(rngData.Rows.Count, rngData.Columns.Count + 8)
+    
+        rngData(1, 6).ColumnWidth = 4
+        rngData(1, 7).ColumnWidth = 5
+        rngData(1, 8).ColumnWidth = 22
+        rngData(1, 9).ColumnWidth = 40
+        rngData(1, 10).ColumnWidth = 7
+        rngData(1, 11).ColumnWidth = 11
+        rngData(1, 12).ColumnWidth = 8
+        rngData(1, 13).ColumnWidth = 8
+        rngData(1, 14).ColumnWidth = 8
+        rngData(1, 15).ColumnWidth = 30
+        
+        For i = 6 To 15
+            rngData(1, i).Value(11) = orderMat(1, i - 1).Value(11)
+        Next i
+        
+        Set PrepareTable = rngData
+        
+    End Function
+

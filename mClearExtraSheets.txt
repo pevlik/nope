@@ -1,0 +1,40 @@
+mClearExtraSheets
+Option Explicit
+
+Const mainSheet As String = "Обработка спецификации"
+Const treeSheet As String = "Дерево узлов Cadmatic Hull"
+Const orderCondSheet As String = "Для сводных данных"
+Const mergeCondSheet As String = "Условия для объединения"
+Const namesOfDrawings As String = "Название чертежей РКД"
+
+
+Sub ClearExtraSheets()
+    
+    Call mCommonRoutines.StartOptimizer
+    
+    Call DeleteSheets
+    
+    Call mCommonRoutines.StopOptimizer(mainSheet)
+    
+End Sub
+
+Sub DeleteSheets()
+
+    Dim ws As Worksheet
+    
+    Application.DisplayAlerts = False
+    
+    For Each ws In Application.ThisWorkbook.Worksheets
+        If ws.name <> mainSheet And ws.name <> treeSheet Then
+            If ws.name <> orderCondSheet And ws.name <> mergeCondSheet Then
+                If ws.name <> namesOfDrawings Then
+                    ws.Delete
+                End If
+            End If
+        End If
+    Next
+    
+    Application.DisplayAlerts = True
+    
+End Sub
+

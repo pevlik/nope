@@ -1,0 +1,88 @@
+Option Explicit
+
+Const mainSheet As String = "Обработка спецификации"
+
+Sub Units()
+    
+    Dim separatorState As Integer
+    Dim sheetName As String
+    
+    separatorState = mCommonRoutines.StartRoutines
+    
+    sheetName = BodyOfMacro(separatorState)
+    
+    Call mCommonRoutines.EndRoutines(separatorState, sheetName)
+    
+End Sub
+
+Function BodyOfMacro(separatorState As Integer) As String
+
+    Dim secNumber As String, projNumber As String, sheetName As String
+
+    If StrComp(Worksheets(mainSheet).TextBox1.Value, "") = 0 Then
+        Worksheets(mainSheet).TextBox1.Value = InputBox("Номер Вашей секции:")
+    End If
+
+    secNumber = Worksheets(mainSheet).TextBox1.Value
+    projNumber = Worksheets(mainSheet).TextBox2.Value
+    sheetName = "Units_" & secNumber
+
+    Call ExportUnits(secNumber, projNumber, sheetName, separatorState)
+    
+'    Call UnitsHandler(sheetName)
+
+    BodyOfMacro = sheetName
+    
+End Function
+
+Sub ExportUnits(secNumber As String, projNumber As String, sheetName As String, separatorState As Integer)
+
+    Dim wsDownload As Worksheet
+    Dim pathToFile As String
+
+    pathToFile = "N:\HullProjects\" & projNumber & "\" & secNumber & "\pi\rep-pb_units_all.list"
+    
+    Call mCommonRoutines.SheetCreater(sheetName, mainSheet)
+
+    Set wsDownload = ThisWorkbook.Sheets(sheetName)
+
+    On Error GoTo stopMacro
+    With wsDownload.QueryTables.Add(Connection:="TEXT;" & pathToFile, Destination:=wsDownload.Range("A1"))
+        .TextFileParseType = xlDelimited
+        .TextFilePlatform = 65001
+        .TextFileCommaDelimiter = True
+        .Refresh
+    End With
+    
+    GoTo continueMacro
+    
+'   If file doesn't find Then Macro will stop
+stopMacro:
+    Application.DisplayAlerts = False
+    Worksheets(sheetName).Delete
+    Application.DisplayAlerts = True
+    
+    Worksheets(mainSheet).Activate
+    Call mCommonRoutines.EndRoutines(separatorState, mainSheet)
+    End
+
+' If file exists Then Macro will continue
+continueMacro:
+    Call DataSorting(secNumber)
+
+End Sub
+
+Sub DataSorting(secNumber As String)
+
+    Columns("A:A").Select
+    Selection.TextToColumns Destination:=Range("A1"), DataType:=xlDelimited, _
+        TextQualifier:=xlDoubleQuote, Other:=True, OtherChar:="|", _
+        FieldInfo:=Array(Array(1, 1), Array(2, 1), Array(3, 1), Array(4, 1), Array(5, 1), _
+        Array(6, 1), Array(7, 1), Array(8, 1), Array(9, 1), Array(10, 1), Array(11, 1), Array(12, 1), _
+        Array(13, 1), Array(14, 1), Array(15, 1), Array(16, 1), Array(17, 1), Array(18, 1), _
+        Array(19, 1), Array(20, 1)), TrailingMinusNumbers:=True
+    Columns("A:A").Delete
+    
+    Range("A:G").Replace What:=" ", Replacement:="", LookAt:=xlPart
+    
+End Sub

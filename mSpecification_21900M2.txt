@@ -1,0 +1,370 @@
+Option Explicit
+Const mainSheet As String = "Обработка спецификации"
+
+Sub Specification_21900M2()
+    
+    Dim separatorState As Integer
+    Dim sheetName As String
+    
+    separatorState = mCommonRoutines.StartRoutines
+    
+    sheetName = BodyOfMacro(separatorState)
+    
+    Call mCommonRoutines.EndRoutines(separatorState, sheetName)
+    
+
+End Sub
+
+Function BodyOfMacro(separatorState As Integer) As String
+
+    Dim secNumber As String, projNumber As String, sheetName As String
+
+    If StrComp(Worksheets(mainSheet).TextBox1.Value, "") = 0 Then
+        Worksheets(mainSheet).TextBox1.Value = InputBox("Номер Вашей секции:")
+    End If
+
+    secNumber = Worksheets(mainSheet).TextBox1.Value
+    projNumber = Worksheets(mainSheet).TextBox2.Value
+    sheetName = "Spec_" & secNumber
+
+    Call ExportDataUTF8(secNumber, projNumber, sheetName, separatorState)
+    
+    Call NamesOfSubsections
+    
+    Call NamesOfUnits("SR", "на секцию")
+
+    Call NamesOfUnits("SS", "на стапель")
+    
+    Call NamesOfUnits("ST", "на плаву")
+    
+    Call NameColumn
+    
+    Call WidthOfColumns
+    
+    Call AddFooter
+    
+    BodyOfMacro = sheetName
+    
+End Function
+
+Sub ExportDataUTF8(secNumber As String, projNumber As String, sheetName As String, separatorState As Integer)
+
+    Dim wsDownload As Worksheet
+    Dim pathToFile As String
+
+    pathToFile = "N:\HullProjects\" & projNumber & "\" & secNumber & "\pi\rep-specification.list"
+    
+    Call mCommonRoutines.SheetCreater(sheetName, mainSheet)
+
+    Set wsDownload = ThisWorkbook.Sheets(sheetName)
+
+    On Error GoTo stopMacro
+    With wsDownload.QueryTables.Add(Connection:="TEXT;" & pathToFile, Destination:=wsDownload.Range("A1"))
+        .TextFileParseType = xlDelimited
+        .TextFilePlatform = 65001
+        .TextFileCommaDelimiter = True
+        .Refresh
+    End With
+    
+    GoTo continueMacro
+    
+'   If file doesn't find Then Macro will stop
+stopMacro:
+    Application.DisplayAlerts = False
+    Worksheets(sheetName).Delete
+    Application.DisplayAlerts = True
+    
+    Worksheets(mainSheet).Activate
+    Call mCommonRoutines.EndRoutines(separatorState, mainSheet)
+    End
+
+' If file exists Then Macro will continue
+continueMacro:
+    Call DataSorting(secNumber)
+
+End Sub
+
+Sub DataSorting(secNumber As String)
+
+    Columns("A:A").TextToColumns Destination:=Range("A1"), DataType:=xlDelimited, _
+        TextQualifier:=xlDoubleQuote, Other:=True, OtherChar:="|", _
+        FieldInfo:=Array(Array(1, 1), Array(2, 1), Array(3, 1), Array(4, 1), Array(5, 1), _
+        Array(6, 1), Array(7, 1), Array(8, 1), Array(9, 1), Array(10, 1), Array(11, 1), Array(12, 1), _
+        Array(13, 1), Array(14, 1), Array(15, 1), Array(16, 1), Array(17, 1), Array(18, 1), _
+        Array(19, 1), Array(20, 1)), TrailingMinusNumbers:=True
+    Range("A:A").ClearContents
+    Rows("1:1").Insert Shift:=xlDown
+    Range("M:M").ClearContents
+    
+    Range("A:Q").Replace What:=" ", Replacement:="", LookAt:=xlPart
+'    Range("E:E").Replace What:=secNumber & "-", Replacement:="", LookAt:=xlPart
+    
+    With Cells
+        .Font.name = "Ariel"
+        .Font.size = 10
+        .VerticalAlignment = xlCenter
+    End With
+
+    Range("B:B,G:G").HorizontalAlignment = xlCenter
+    
+    With Columns("B:M")
+        .Borders(xlEdgeLeft).LineStyle = xlContinuous
+        .Borders(xlEdgeLeft).Weight = xlMedium
+        .Borders(xlEdgeRight).LineStyle = xlContinuous
+        .Borders(xlEdgeRight).Weight = xlMedium
+        .Borders(xlEdgeTop).LineStyle = xlContinuous
+        .Borders(xlEdgeTop).Weight = xlThin
+        .Borders(xlEdgeBottom).LineStyle = xlContinuous
+        .Borders(xlEdgeBottom).Weight = xlThin
+        .Borders(xlInsideVertical).LineStyle = xlContinuous
+        .Borders(xlInsideVertical).Weight = xlThin
+        .Borders(xlInsideHorizontal).LineStyle = xlContinuous
+        .Borders(xlInsideHorizontal).Weight = xlThin
+    End With
+    
+    With Columns("N:Q")
+        .Borders(xlEdgeTop).LineStyle = xlDot
+        .Borders(xlEdgeTop).Weight = xlThin
+        .Borders(xlEdgeBottom).LineStyle = xlDot
+        .Borders(xlEdgeBottom).Weight = xlThin
+        .Borders(xlEdgeRight).LineStyle = xlDot
+        .Borders(xlEdgeRight).Weight = xlThin
+        .Borders(xlInsideVertical).LineStyle = xlDot
+        .Borders(xlInsideVertical).Weight = xlThin
+        .Borders(xlInsideHorizontal).LineStyle = xlDot
+        .Borders(xlInsideHorizontal).Weight = xlThin
+    End With
+    
+    Columns("K:L").NumberFormat = "0.0"
+    
+End Sub
+
+Sub NamesOfSubsections()
+
+    Dim x As Integer
+    Dim counter As Integer: counter = 1
+    Dim amountSubsections As Integer: amountSubsections = 99
+    Dim subsecName As String, subsecNumber As String
+    Dim rng As Range, currentCell As Range
+    
+'    Создания и инициализация массива с допустимыми буквами из кириллицы
+    Dim cyrillicLetters() As String
+    cyrillicLetters = Split("А:Б:В:Г:Д:Е:Ж:И:К:Л:М:Н:П:Р:С:Т:У:Ф:Ц:Ш:Щ:Э:Ю:Я", ":")
+    
+    
+    For x = 1 To amountSubsections
+
+        If x < 10 Then
+            subsecName = "Узел:S0" & x
+        Else
+            subsecName = "Узел:S" & x
+        End If
+    
+        Set rng = Columns("C:C")
+
+'       Поиск начал подсекции X
+        Set currentCell = rng.Find(What:=subsecName & "PL")
+
+'       Вставка названия подсекции X
+        If Not currentCell Is Nothing Then
+            
+            If x < (UBound(cyrillicLetters) + 2) Then
+                subsecNumber = cyrillicLetters(x - 1)
+            Else
+                If (x Mod (UBound(cyrillicLetters) + 1)) = 0 Then
+                    counter = counter + 1
+                End If
+                subsecNumber = cyrillicLetters(x - (UBound(cyrillicLetters) + 1) * counter - 1) & counter
+            End If
+        
+            With currentCell.Offset(-1, 0)
+                .Value = "Подсекция " & subsecNumber
+                .Font.Bold = True
+                .EntireRow.Insert
+            End With
+            
+'           Поиск начала узлов на подсекцию X
+            Set currentCell = rng.Find(What:=subsecName & "_")
+
+'           Вставка строчки "Узлы на подсекцию X"
+            If Not currentCell Is Nothing Then
+                With currentCell.Offset(-1, 0)
+                    .Value = "Узлы на подсекцию " & subsecNumber
+                    .EntireRow.Insert
+                End With
+            End If
+                
+'           Переименование узлов и россыпи на подсекцию № ...
+            rng.Replace What:=subsecName & "PL", Replacement:="Листы настила", LookAt:=xlPart
+            rng.Replace What:=subsecName & "PR", Replacement:="Ребра жесткости настила", LookAt:=xlPart
+            rng.Replace What:=subsecName & "_R", Replacement:="Россыпь на подсекцию " & subsecNumber, LookAt:=xlPart
+            rng.Replace What:=subsecName & "_00", Replacement:="Узел №", LookAt:=xlPart
+            rng.Replace What:=subsecName & "_0", Replacement:="Узел №", LookAt:=xlPart
+            rng.Replace What:=subsecName & "_", Replacement:="Узел №", LookAt:=xlPart
+            
+        Else
+'           Поиск начал подсекции X (состоящую только из узлов)
+            Set currentCell = rng.Find(What:=subsecName & "_")
+
+'           Вставка названия подсекции X
+            If Not currentCell Is Nothing Then
+            
+                If x < (UBound(cyrillicLetters) + 2) Then
+                    subsecNumber = cyrillicLetters(x - 1)
+                Else
+                    If (x Mod (UBound(cyrillicLetters) + 1)) = 0 Then
+                        counter = counter + 1
+                    End If
+                    subsecNumber = cyrillicLetters(x - (UBound(cyrillicLetters) + 1) * counter - 1) & counter
+                End If
+        
+                With currentCell.Offset(-1, 0)
+                    .Value = "Подсекция " & subsecNumber
+                    .Font.Bold = True
+                    .EntireRow.Insert
+                End With
+                
+'               Переименование узлов и россыпи на подсекцию № ...
+                rng.Replace What:=subsecName & "_R", Replacement:="Россыпь на подсекцию " & subsecNumber, LookAt:=xlPart
+                rng.Replace What:=subsecName & "_00", Replacement:="Узел №", LookAt:=xlPart
+                rng.Replace What:=subsecName & "_0", Replacement:="Узел №", LookAt:=xlPart
+                rng.Replace What:=subsecName & "_", Replacement:="Узел №", LookAt:=xlPart
+            
+            End If
+
+        End If
+    
+    Next x
+
+End Sub
+
+Sub NamesOfUnits(str1 As String, str2 As String)
+
+    Dim rng As Range, currentCell As Range
+    Set rng = Columns("C:C")
+
+    Set currentCell = rng.Find(What:="Узел:" & str1 & "_")
+
+    If Not currentCell Is Nothing Then
+    
+        If StrComp(currentCell.Value, "Узел:" & str1 & "_R") = 0 Then
+        
+            rng.Replace What:="Узел:" & str1 & "_R", Replacement:="Россыпь " & str2, LookAt:=xlPart
+            
+        Else
+        
+            With currentCell.Offset(-1, 0)
+                .Value = "Узлы " & str2
+                .Font.Bold = True
+                .EntireRow.Insert
+            End With
+            
+            With Application.ReplaceFormat.Font
+                .FontStyle = "полужирный"
+            End With
+        
+            rng.Replace What:="Узел:" & str1 & "_R", Replacement:="Россыпь " & str2, LookAt:=xlPart, ReplaceFormat:=True
+            rng.Replace What:="Узел:" & str1 & "_00", Replacement:="Узел №", LookAt:=xlPart
+            rng.Replace What:="Узел:" & str1 & "_0", Replacement:="Узел №", LookAt:=xlPart
+            rng.Replace What:="Узел:" & str1 & "_", Replacement:="Узел №", LookAt:=xlPart
+            
+        End If
+        
+    End If
+
+End Sub
+
+Sub NameColumn()
+    Dim rng As Range
+    Dim i As Integer, iFirst As Integer, iLast As Integer
+    iFirst = Cells(1, 6).End(xlDown).Row
+    iLast = Cells(Rows.Count, 6).End(xlUp).Row
+    
+    For i = iFirst To iLast
+        If StrComp(Cells(i, 6).Value, "PL", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Лист"
+        ElseIf StrComp(Cells(i, 6).Value, "Bkt", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Кница"
+        ElseIf StrComp(Cells(i, 6).Value, "ST", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Заделка"
+        ElseIf StrComp(Cells(i, 6).Value, "FB", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Полоса " & Cells(i, 9).Value & "X" & Cells(i, 10).Value
+        
+        
+        
+        ElseIf StrComp(Cells(i, 6).Value, "P", vbTextCompare) = 0 And StrComp(Cells(i, 10).Value, "8", vbTextCompare) = 0 And StrComp(Cells(i, 9).Value, "80", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Полособульб №8"
+        
+        
+        ElseIf StrComp(Cells(i, 6).Value, "P", vbTextCompare) = 0 And StrComp(Cells(i, 10).Value, "6", vbTextCompare) = 0 And StrComp(Cells(i, 9).Value, "100", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Полособульб №10"
+        
+        
+        ElseIf StrComp(Cells(i, 6).Value, "P", vbTextCompare) = 0 And StrComp(Cells(i, 10).Value, "7", vbTextCompare) = 0 And StrComp(Cells(i, 9).Value, "120", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Полособульб №12"
+            
+            
+        ElseIf StrComp(Cells(i, 6).Value, "P", vbTextCompare) = 0 And StrComp(Cells(i, 10).Value, "7", vbTextCompare) = 0 And StrComp(Cells(i, 9).Value, "140", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Полособульб №14а"
+            
+        ElseIf StrComp(Cells(i, 6).Value, "P", vbTextCompare) = 0 And StrComp(Cells(i, 10).Value, "9", vbTextCompare) = 0 And StrComp(Cells(i, 9).Value, "140", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Полособульб №14б"
+            
+        
+        ElseIf StrComp(Cells(i, 6).Value, "P", vbTextCompare) = 0 And StrComp(Cells(i, 10).Value, "8", vbTextCompare) = 0 And StrComp(Cells(i, 9).Value, "160", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Полособульб №16а"
+            
+        ElseIf StrComp(Cells(i, 6).Value, "P", vbTextCompare) = 0 And StrComp(Cells(i, 10).Value, "10", vbTextCompare) = 0 And StrComp(Cells(i, 9).Value, "160", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Полособульб №16б"
+            
+        ElseIf StrComp(Cells(i, 6).Value, "P", vbTextCompare) = 0 And StrComp(Cells(i, 10).Value, "9", vbTextCompare) = 0 And StrComp(Cells(i, 9).Value, "180", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Полособульб №18а"
+
+        ElseIf StrComp(Cells(i, 6).Value, "P", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Полособульб " & Cells(i, 9).Value & "X" & Cells(i, 10).Value
+
+        ElseIf StrComp(Cells(i, 6).Value, "AS", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Круг " & Cells(i, 10).Value
+        ElseIf StrComp(Cells(i, 6).Value, "PY", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Труба круглая " & Right(Cells(i, 18).Value, Len(Cells(i, 18).Value) - 5)
+        ElseIf StrComp(Cells(i, 6).Value, "KO", vbTextCompare) = 0 Then
+            Cells(i, 4).Value = "Труба квадратная " & Right(Cells(i, 18).Value, Len(Cells(i, 18).Value) - 7)
+        End If
+    Next i
+
+End Sub
+
+Sub WidthOfColumns()
+
+    Columns("B:B").ColumnWidth = 6
+    Columns("C:C").ColumnWidth = 5
+    Columns("D:D").ColumnWidth = 23
+    Columns("E:E").ColumnWidth = 24
+    Columns("F:F").ColumnWidth = 9
+    Columns("G:G").ColumnWidth = 10
+    Columns("H:H").ColumnWidth = 6
+    Columns("I:I").ColumnWidth = 7
+    Columns("J:J").ColumnWidth = 8
+    Columns("K:K").ColumnWidth = 8
+    Columns("L:L").ColumnWidth = 7
+    Columns("M:M").ColumnWidth = 24
+    Columns("N:P").ColumnWidth = 11
+    Columns("Q:Q").ColumnWidth = 10
+
+    Columns("R:T").Delete
+    Columns("A:A").Delete
+
+End Sub
+
+Sub AddFooter()
+
+    Dim firstCell As Range, lastCell As Range
+    Set firstCell = Cells(1, 11).End(xlDown)
+    Set lastCell = Cells(Rows.Count, 11).End(xlUp)
+    
+    lastCell.Offset(3, -6).Value = "Масса деталей"
+    lastCell.Offset(3, 0).Formula = "=SUM(" & firstCell.Address(False, False) & ":" & lastCell.Address(False, False) & ")"
+    lastCell.Offset(4, -6).Value = "Масса с наплавленным металлом"
+    lastCell.Offset(4, 0).Formula = "=" & lastCell.Offset(3, 0).Address(False, False) & "*1.01"
+
+End Sub

@@ -1,0 +1,171 @@
+Option Explicit
+
+
+Function StartRoutines() As Integer
+
+    Dim separatorState As Integer
+
+    Call StartOptimizer
+    
+    separatorState = SeporatorChecher
+    
+    Call ChangeSeporator(separatorState)
+    
+    StartRoutines = separatorState
+    
+End Function
+
+Sub EndRoutines(separatorState As Integer, sheetName As String)
+
+    Call UnChangeSeporator(separatorState)
+    
+    Call StopOptimizer(sheetName)
+    
+End Sub
+
+
+Sub StartOptimizer()
+
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    Application.EnableEvents = False
+    
+    Call UnProtectWorkbook
+
+End Sub
+
+Sub StopOptimizer(sheetName As String)
+
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    Application.EnableEvents = True
+    
+    Application.CutCopyMode = False
+    Worksheets(sheetName).Activate
+    Range("A1").Select
+    
+    Call ProtectWorkbook
+    
+End Sub
+
+Sub UnProtectWorkbook()
+
+    ThisWorkbook.Unprotect "1111"
+    
+End Sub
+
+Sub ProtectWorkbook()
+
+    ThisWorkbook.Protect "1111", True, True
+    
+End Sub
+
+Sub SheetCreater(sheetTitle As String, mainSheet As String)
+    
+    If DoesSheetExists(sheetTitle) Then
+        Application.DisplayAlerts = False
+        Worksheets(sheetTitle).Delete
+        Application.DisplayAlerts = True
+    End If
+    
+    Worksheets.Add(After:=Worksheets(mainSheet)).name = sheetTitle
+    Range("A1").Select
+    
+End Sub
+
+Function DoesSheetExists(sheetTitle As String) As Boolean
+
+    Dim ws As Worksheet
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(sheetTitle)
+    On Error GoTo 0
+
+    If Not ws Is Nothing Then DoesSheetExists = True
+    
+End Function
+
+Function SeporatorChecher() As Integer
+    
+    Dim status As Integer
+
+    If Application.UseSystemSeparators = True Then
+    
+        If Application.International(xlDecimalSeparator) = "," Then
+        
+'           Not Ok: decimal separator - comma; using system separators
+            status = 1
+            
+        ElseIf Application.International(xlDecimalSeparator) = "." Then
+        
+'           Ok: decimal separator - point; using system separators
+            status = 0
+            
+        End If
+        
+    ElseIf Application.UseSystemSeparators = False Then
+    
+        If Application.International(xlDecimalSeparator) = "," Then
+        
+'           Not Ok: decimal separator - comma; not using system separators
+            status = 2
+            
+        ElseIf Application.International(xlDecimalSeparator) = "." Then
+        
+'           Ok: decimal separator - point; not using system separators
+            status = 0
+            
+        End If
+        
+    Else
+    
+'       MsgBox "Nothing Else Matter"
+        status = 3
+        
+    End If
+    
+    SeporatorChecher = status
+    
+End Function
+
+Sub ChangeSeporator(status As Integer)
+
+    Select Case status
+    Case 0
+'       If status = 0 then macro nothing to do
+    Case 1
+        With Application
+            .DecimalSeparator = "."
+            .UseSystemSeparators = False
+        End With
+        
+    Case 2
+        Application.DecimalSeparator = "."
+    
+    Case Else
+        MsgBox "Произошла ошибка - обратитесь к разработчику макроса"
+    
+    End Select
+
+End Sub
+
+Sub UnChangeSeporator(status As Integer)
+
+    Select Case status
+    Case 0
+'       If status = 0 then macro nothing to do
+    Case 1
+        With Application
+            .DecimalSeparator = ","
+            .UseSystemSeparators = True
+        End With
+        
+    Case 2
+        Application.DecimalSeparator = ","
+    
+    Case Else
+        MsgBox "Произошла ошибка - обратитесь к разработчику макроса"
+    
+    End Select
+
+End Sub
